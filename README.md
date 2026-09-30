@@ -133,16 +133,3 @@ The rule engine currently recognizes common civic issue keywords such as:
 Priority is calculated from factors such as issue category, emergency keywords, description length, and location availability.
 
 This is deliberately a transparent rule-based baseline. A future ML image-classification module can be added without replacing the API contract.
-
-## Initial commit
-
-Suggested commit:
-
-```bash
-git init
-git add .
-git commit -m "chore: initialize CivicSolve project"
-git branch -M main
-git remote add origin <YOUR_GITHUB_REPOSITORY_URL>
-git push -u origin main
-```
