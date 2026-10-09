@@ -1,12 +1,16 @@
 {
-  "name": "civicsolve",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Smart Civic Issue Reporting System",
+  "name": "civicsolve-backend",
+  "version": "1.0.0",
+  "description": "CivicSolve - Crowdsourced Civic Issue Reporting (Module 1 demo)",
+  "main": "server.js",
   "scripts": {
-    "dev:client": "npm --prefix client run dev",
-    "dev:server": "npm --prefix server run dev",
-    "build": "npm --prefix client run build",
-    "start": "npm --prefix server start"
+    "start": "node server.js",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.5.0",
+    "multer": "^1.4.5-lts.1"
   }
 }
