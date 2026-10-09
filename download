@@ -1,0 +1,4 @@
+node_modules
+data/issues.json
+uploads/*
+!uploads/.gitkeep
