@@ -27,28 +27,58 @@ export async function getIssue(req, res, next) {
 
 export async function createIssue(req, res, next) {
   try {
-    const { title, description, latitude, longitude, imageUrl } = req.body;
+    const { title, description, latitude, longitude, imageUrl } = req.body ?? {};
+    const cleanTitle = typeof title === "string" ? title.trim() : "";
+    const cleanDescription = typeof description === "string" ? description.trim() : "";
 
-    if (!title?.trim() || !description?.trim()) {
-      throw httpError("Title and description are required.");
+    if (!cleanTitle || !cleanDescription) {
+      throw httpError("Title and description are required.", 400);
+    }
+    if (cleanTitle.length > 120) {
+      throw httpError("Title must be 120 characters or fewer.", 400);
+    }
+    if (cleanDescription.length > 2000) {
+      throw httpError("Description must be 2,000 characters or fewer.", 400);
     }
 
-    const classification = classifyIssue({ title, description });
+    const hasLatitude = latitude !== null && latitude !== undefined && latitude !== "";
+    const hasLongitude = longitude !== null && longitude !== undefined && longitude !== "";
+    if (hasLatitude !== hasLongitude) {
+      throw httpError("Provide both latitude and longitude, or leave both empty.", 400);
+    }
+
+    let parsedLatitude = null;
+    let parsedLongitude = null;
+    if (hasLatitude && hasLongitude) {
+      parsedLatitude = Number(latitude);
+      parsedLongitude = Number(longitude);
+      if (!Number.isFinite(parsedLatitude) || parsedLatitude < -90 || parsedLatitude > 90) {
+        throw httpError("Latitude must be a number between -90 and 90.", 400);
+      }
+      if (!Number.isFinite(parsedLongitude) || parsedLongitude < -180 || parsedLongitude > 180) {
+        throw httpError("Longitude must be a number between -180 and 180.", 400);
+      }
+    }
+
+    const classification = classifyIssue({
+      title: cleanTitle,
+      description: cleanDescription
+    });
 
     const priority = calculatePriority({
-      title,
-      description,
-      latitude,
-      longitude,
+      title: cleanTitle,
+      description: cleanDescription,
+      latitude: parsedLatitude,
+      longitude: parsedLongitude,
       category: classification.category
     });
 
     const issue = await Issue.create({
-      title,
-      description,
+      title: cleanTitle,
+      description: cleanDescription,
       location: {
-        latitude: latitude ?? null,
-        longitude: longitude ?? null
+        latitude: parsedLatitude,
+        longitude: parsedLongitude
       },
       imageUrl: imageUrl ?? null,
       ...classification,
@@ -65,8 +95,8 @@ export async function updateIssueStatus(req, res, next) {
   try {
     const allowedStatuses = ["submitted", "in_review", "assigned", "resolved"];
 
-    if (!allowedStatuses.includes(req.body.status)) {
-      throw httpError("Invalid issue status.");
+    if (!allowedStatuses.includes(req.body?.status)) {
+      throw httpError("Invalid issue status.", 400);
     }
 
     const issue = await Issue.findByIdAndUpdate(
