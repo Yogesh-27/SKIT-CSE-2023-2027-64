@@ -46,7 +46,7 @@ export default function Dashboard() {
 
   const stats = useMemo(() => ({
     total: issues.length,
-    high: issues.filter((issue) => issue.priority === "high").length,
+    high: issues.filter((issue) => ["high", "critical"].includes(issue.priority)).length,
     resolved: issues.filter((issue) => issue.status === "resolved").length,
     pending: issues.filter((issue) => issue.status !== "resolved").length
   }), [issues]);
@@ -164,6 +164,7 @@ export default function Dashboard() {
                 <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-teal-500">
                   <option value={ALL}>All priorities</option>
                   <option value="high">High</option>
+                  <option value="critical">Critical</option>
                   <option value="medium">Medium</option>
                   <option value="low">Low</option>
                 </select>
