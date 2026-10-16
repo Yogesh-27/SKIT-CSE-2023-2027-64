@@ -1,30 +1,11 @@
-const departments = [
-  {
-    name: "Roads & Infrastructure",
-    categories: ["roads"]
-  },
-  {
-    name: "Sanitation",
-    categories: ["sanitation"]
-  },
-  {
-    name: "Water Supply",
-    categories: ["water"]
-  },
-  {
-    name: "Public Utilities",
-    categories: ["public_utilities"]
-  },
-  {
-    name: "Drainage & Sewerage",
-    categories: ["drainage"]
-  },
-  {
-    name: "General Civic Services",
-    categories: ["other"]
-  }
-];
+import { CATEGORIES, routeDepartment } from "../services/classificationEngine.js";
 
 export function listDepartments(req, res) {
-  res.json({ departments });
+  const grouped = new Map();
+  for (const category of Object.keys(CATEGORIES)) {
+    const name = routeDepartment(category);
+    if (!grouped.has(name)) grouped.set(name, []);
+    grouped.get(name).push(category);
+  }
+  res.json({ departments: [...grouped].map(([name, categories]) => ({ name, categories })) });
 }
