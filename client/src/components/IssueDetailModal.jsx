@@ -1,6 +1,7 @@
 import { X, MapPin, Clock, AlertTriangle, CheckCircle2, ThumbsUp, Tag, Building2, ChevronRight } from "lucide-react";
 import CategoryBadge from "./CategoryBadge";
 import UpvoteButton from "./UpvoteButton";
+import StatusStepper from "./StatusStepper";
 
 /**
  * CivicSolve — Issue Detail Modal
@@ -99,6 +100,14 @@ export default function IssueDetailModal({ issue, onClose, onIssueUpdated }) {
 
         {/* Body */}
         <div className="px-6 py-5 space-y-5">
+
+          {/* Workflow Status Stepper */}
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Workflow Status Progression
+            </h3>
+            <StatusStepper currentStatus={issue.status} />
+          </section>
 
           {/* Description */}
           <section>

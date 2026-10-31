@@ -1,7 +1,8 @@
 import { NavLink, Route, Routes } from "react-router-dom";
-import { LayoutDashboard, PlusCircle, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, PlusCircle, ShieldCheck, SearchCheck } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import ReportIssue from "./pages/ReportIssue";
+import TrackStatus from "./pages/TrackStatus";
 
 /**
  * CivicSolve — Root Application Component
@@ -9,6 +10,7 @@ import ReportIssue from "./pages/ReportIssue";
  * Renders the top navigation bar and the main page routes:
  *   /        → Authority Dashboard
  *   /report  → Citizen Report Form
+ *   /track   → Track Complaint Status
  *
  * Author: Kuldeep Singh Rathore (Member 3) — Frontend Development
  */
@@ -41,6 +43,10 @@ function Navigation() {
             <LayoutDashboard size={17} />
             Dashboard
           </NavLink>
+          <NavLink to="/track" className={linkClass}>
+            <SearchCheck size={17} />
+            Track Status
+          </NavLink>
           <NavLink to="/report" className={linkClass}>
             <PlusCircle size={17} />
             Report Issue
@@ -59,6 +65,7 @@ export default function App() {
         <Routes>
           <Route path="/"       element={<Dashboard />} />
           <Route path="/report" element={<ReportIssue />} />
+          <Route path="/track"  element={<TrackStatus />} />
         </Routes>
       </main>
     </div>
