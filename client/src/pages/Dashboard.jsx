@@ -1,26 +1,65 @@
 import { useEffect, useMemo, useState } from "react";
-import { Filter, MapPin, RefreshCw, Search, X } from "lucide-react";
-import { getIssues, updateIssueStatus } from "../services/api";
+import { Filter, RefreshCw, Search, X } from "lucide-react";
+import { getIssues, updateIssueStatus, getAnalyticsSummary } from "../services/api";
 import StatCard from "../components/StatCard";
 import IssueTable from "../components/IssueTable";
+import IssueDetailModal from "../components/IssueDetailModal";
+
+/**
+ * CivicSolve — Authority Dashboard
+ *
+ * Displays all submitted civic issues with:
+ * - KPI stat cards (from analytics endpoint)
+ * - Search + filter controls
+ * - Issue table with inline status changes
+ * - Issue detail modal
+ *
+ * Author: Kuldeep Singh Rathore (Member 3) — Frontend Development
+ * API integration: Arun Kumar Yadav (Team Lead)
+ */
 
 const ALL = "all";
 
+const STATUS_OPTIONS = [
+  { value: ALL,          label: "All Statuses" },
+  { value: "submitted",  label: "Submitted" },
+  { value: "in_review",  label: "In Review" },
+  { value: "assigned",   label: "Assigned" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "resolved",   label: "Resolved" },
+  { value: "rejected",   label: "Rejected" }
+];
+
+const PRIORITY_OPTIONS = [
+  { value: ALL,        label: "All Priorities" },
+  { value: "critical", label: "Critical" },
+  { value: "high",     label: "High" },
+  { value: "medium",   label: "Medium" },
+  { value: "low",      label: "Low" }
+];
+
 export default function Dashboard() {
-  const [issues, setIssues] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [issues,        setIssues]        = useState([]);
+  const [analytics,     setAnalytics]     = useState(null);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState("");
+  const [search,        setSearch]        = useState("");
+  const [statusFilter,  setStatusFilter]  = useState(ALL);
   const [categoryFilter, setCategoryFilter] = useState(ALL);
   const [priorityFilter, setPriorityFilter] = useState(ALL);
+  const [selectedIssue, setSelectedIssue] = useState(null);
 
-  async function loadIssues() {
+  // ── Load data ─────────────────────────────────────────────────────────────
+  async function loadData() {
     try {
       setLoading(true);
       setError("");
-      const data = await getIssues();
-      setIssues(Array.isArray(data.issues) ? data.issues : []);
+      const [issuesData, analyticsData] = await Promise.all([
+        getIssues(),
+        getAnalyticsSummary().catch(() => null)
+      ]);
+      setIssues(Array.isArray(issuesData.issues) ? issuesData.issues : []);
+      setAnalytics(analyticsData ?? null);
     } catch {
       setError("Unable to load issues. Make sure the API server and MongoDB are running.");
     } finally {
@@ -28,10 +67,9 @@ export default function Dashboard() {
     }
   }
 
-  useEffect(() => {
-    loadIssues();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
+  // ── Status change ─────────────────────────────────────────────────────────
   async function handleStatusChange(id, status) {
     try {
       setError("");
@@ -39,40 +77,59 @@ export default function Dashboard() {
       setIssues((current) =>
         current.map((issue) => (issue._id === id ? data.issue : issue))
       );
-    } catch (requestError) {
-      setError(requestError.response?.data?.message ?? "Could not update the issue status.");
+      // Keep modal in sync
+      if (selectedIssue?._id === id) setSelectedIssue(data.issue);
+    } catch (err) {
+      setError(err.response?.data?.message ?? "Could not update the issue status.");
     }
   }
 
-  const stats = useMemo(() => ({
-    total: issues.length,
-    high: issues.filter((issue) => ["high", "critical"].includes(issue.priority)).length,
-    resolved: issues.filter((issue) => issue.status === "resolved").length,
-    pending: issues.filter((issue) => issue.status !== "resolved").length
-  }), [issues]);
+  // ── Issue updated (e.g. upvoted) ──────────────────────────────────────────
+  function handleIssueUpdated(updatedIssue) {
+    setIssues((current) =>
+      current.map((issue) => (issue._id === updatedIssue._id ? updatedIssue : issue))
+    );
+    setSelectedIssue(updatedIssue);
+  }
 
+  // ── KPI stats (use analytics if available, else compute locally) ──────────
+  const stats = useMemo(() => {
+    if (analytics?.kpi) return analytics.kpi;
+    return {
+      total:       issues.length,
+      highPriority: issues.filter((i) => ["high", "critical"].includes(i.priority)).length,
+      resolved:    issues.filter((i) => i.status === "resolved").length,
+      pending:     issues.filter((i) => !["resolved", "rejected"].includes(i.status)).length
+    };
+  }, [issues, analytics]);
+
+  // ── Categories for filter dropdown ────────────────────────────────────────
   const categories = useMemo(
-    () => [...new Set(issues.map((issue) => issue.category).filter(Boolean))].sort(),
+    () => [...new Set(issues.map((i) => i.category).filter(Boolean))].sort(),
     [issues]
   );
 
+  // ── Filter issues ─────────────────────────────────────────────────────────
   const filteredIssues = useMemo(() => {
     const term = search.trim().toLowerCase();
     return issues.filter((issue) => {
-      const matchesSearch = !term || [
-        issue.title,
-        issue.description,
-        issue.department,
-        issue.category
-      ].some((value) => String(value ?? "").toLowerCase().includes(term));
-      return matchesSearch
-        && (statusFilter === ALL || issue.status === statusFilter)
-        && (categoryFilter === ALL || issue.category === categoryFilter)
-        && (priorityFilter === ALL || issue.priority === priorityFilter);
+      const matchesSearch =
+        !term ||
+        [issue.title, issue.description, issue.department, issue.category].some(
+          (v) => String(v ?? "").toLowerCase().includes(term)
+        );
+      return (
+        matchesSearch &&
+        (statusFilter  === ALL || issue.status   === statusFilter) &&
+        (categoryFilter === ALL || issue.category === categoryFilter) &&
+        (priorityFilter === ALL || issue.priority === priorityFilter)
+      );
     });
   }, [issues, search, statusFilter, categoryFilter, priorityFilter]);
 
-  const hasFilters = search || statusFilter !== ALL || categoryFilter !== ALL || priorityFilter !== ALL;
+  const hasFilters =
+    search || statusFilter !== ALL || categoryFilter !== ALL || priorityFilter !== ALL;
+
   function clearFilters() {
     setSearch("");
     setStatusFilter(ALL);
@@ -80,19 +137,22 @@ export default function Dashboard() {
     setPriorityFilter(ALL);
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <section className="space-y-7">
+
+      {/* Page header */}
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <p className="text-sm font-semibold text-teal-600">Authority Dashboard</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">Issue Resolution Dashboard</h1>
           <p className="mt-2 max-w-2xl text-slate-500">
-            Review citizen reports, inspect automated classification, and manage the current workflow status.
+            Review citizen reports, inspect automated classification, and manage issue workflows.
           </p>
         </div>
         <button
           type="button"
-          onClick={loadIssues}
+          onClick={loadData}
           disabled={loading}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold shadow-sm hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
         >
@@ -101,122 +161,102 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* Error banner */}
       {error && (
         <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
       )}
 
+      {/* KPI Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total Reports" value={stats.total} hint="All submitted issues" />
-        <StatCard label="High Priority" value={stats.high} hint="Requires attention" />
-        <StatCard label="Pending" value={stats.pending} hint="Not resolved yet" />
-        <StatCard label="Resolved" value={stats.resolved} hint="Marked resolved" />
+        <StatCard label="Total Reports"  value={stats.total}        hint="All submitted issues" />
+        <StatCard label="High Priority"  value={stats.highPriority} hint="Requires attention"   accent="red" />
+        <StatCard label="Pending"        value={stats.pending}      hint="Not yet resolved"      accent="amber" />
+        <StatCard label="Resolved"       value={stats.resolved}     hint="Issues closed"         accent="green" />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
-        <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-bold">Issue Reports</h2>
-              <p className="text-sm text-slate-500">
-                Showing {filteredIssues.length} of {issues.length} reports
-              </p>
-            </div>
-            {loading && <span className="text-xs text-slate-500">Loading reports...</span>}
-          </div>
-
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <Filter size={16} className="text-teal-600" />
-              Search and filter
-            </div>
-            <label className="relative block">
-              <span className="sr-only">Search reports</span>
-              <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search title, description, category, department..."
-                className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-              />
-            </label>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <label className="text-xs font-semibold text-slate-600">
-                Status
-                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-teal-500">
-                  <option value={ALL}>All statuses</option>
-                  <option value="submitted">Submitted</option>
-                  <option value="in_review">In review</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="resolved">Resolved</option>
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Category
-                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-teal-500">
-                  <option value={ALL}>All categories</option>
-                  {categories.map((category) => <option key={category} value={category}>{category.replaceAll("_", " ")}</option>)}
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Priority
-                <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-teal-500">
-                  <option value={ALL}>All priorities</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              </label>
-            </div>
-            {hasFilters && (
-              <button type="button" onClick={clearFilters} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900">
-                <X size={14} /> Clear filters
-              </button>
-            )}
-          </div>
-
-          <IssueTable issues={filteredIssues} onStatusChange={handleStatusChange} />
+      {/* Search & Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search issues…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+          />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2">
-            <MapPin size={18} className="text-teal-600" />
-            <h2 className="font-bold">Reported Locations</h2>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Open a report location in OpenStreetMap. Only reports with GPS coordinates are listed.
-          </p>
-          <div className="mt-4 space-y-3">
-            {issues.filter((issue) => Number.isFinite(Number(issue.location?.latitude))
-              && Number.isFinite(Number(issue.location?.longitude))
-              && issue.location?.latitude !== null
-              && issue.location?.longitude !== null).length === 0 ? (
-              <div className="flex min-h-40 flex-col items-center justify-center rounded-xl bg-slate-50 px-4 text-center">
-                <MapPin className="text-slate-400" size={30} />
-                <p className="mt-2 text-sm font-medium text-slate-600">No locations available</p>
-                <p className="mt-1 text-xs text-slate-400">GPS coordinates will appear here when provided.</p>
-              </div>
-            ) : issues.filter((issue) => issue.location?.latitude != null && issue.location?.longitude != null).slice(0, 8).map((issue) => (
-              <div key={issue._id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-800">{issue.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">{Number(issue.location.latitude).toFixed(4)}, {Number(issue.location.longitude).toFixed(4)}</p>
-                </div>
-                <a
-                  href={`https://www.openstreetmap.org/?mlat=${encodeURIComponent(issue.location.latitude)}&mlon=${encodeURIComponent(issue.location.longitude)}#map=17/${encodeURIComponent(issue.location.latitude)}/${encodeURIComponent(issue.location.longitude)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="shrink-0 rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100"
-                >
-                  View map
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Status filter */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+        >
+          {STATUS_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+
+        {/* Category filter */}
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+        >
+          <option value={ALL}>All Categories</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+
+        {/* Priority filter */}
+        <select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value)}
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+        >
+          {PRIORITY_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+
+        {/* Clear filters */}
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            <X size={14} /> Clear
+          </button>
+        )}
       </div>
+
+      {/* Result count */}
+      <p className="text-sm text-slate-500">
+        Showing {filteredIssues.length} of {issues.length} issue{issues.length !== 1 ? "s" : ""}
+        {hasFilters && " (filtered)"}
+      </p>
+
+      {/* Issue table */}
+      <IssueTable
+        issues={filteredIssues}
+        onStatusChange={handleStatusChange}
+        onRowClick={setSelectedIssue}
+      />
+
+      {/* Issue detail modal */}
+      {selectedIssue && (
+        <IssueDetailModal
+          issue={selectedIssue}
+          onClose={() => setSelectedIssue(null)}
+          onIssueUpdated={handleIssueUpdated}
+        />
+      )}
     </section>
   );
 }

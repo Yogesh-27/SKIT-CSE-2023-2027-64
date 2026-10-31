@@ -1,16 +1,17 @@
 {
-  "name": "civicsolve-backend",
-  "version": "1.0.0",
-  "description": "CivicSolve - Crowdsourced Civic Issue Reporting (Module 1 demo)",
-  "main": "server.js",
+  "name": "civicsolve",
+  "version": "0.2.0",
+  "description": "CivicSolve — Crowdsourced Civic Issue Reporting & Resolution System (SKIT/CSE/2023-2027/64)",
+  "private": true,
   "scripts": {
-    "start": "node server.js",
-    "seed": "node seed.js"
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "start:server": "npm run start --prefix server",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "seed": "npm run seed --prefix server"
   },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "mongoose": "^8.5.0",
-    "multer": "^1.4.5-lts.1"
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   }
 }
